@@ -1,0 +1,17 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:16
+    container_name: suprss-db
+    environment:
+      POSTGRES_USER: suprssuser
+      POSTGRES_PASSWORD: suprsspass
+      POSTGRES_DB: suprssdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+volumes:
+  db-data:
