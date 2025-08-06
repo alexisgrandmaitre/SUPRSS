@@ -122,6 +122,33 @@ app.delete('/rssfeeds/:id', async (req, res) => {
   }
 });
 
+// Récupérer tous les articles d’un flux RSS
+
+app.get('/articles/:feedId', async (req, res) => {
+  const { feedId } = req.params;
+  try {
+    const articles = await prisma.article.findMany({
+      where: { feedId: Number(feedId) },
+      orderBy: { publishedAt: 'desc' }
+    });
+    res.json(articles);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/articles', async (req, res) => {
+  const { title, url, publishedAt, author, summary, feedId } = req.body;
+  try {
+    const article = await prisma.article.create({
+      data: { title, url, publishedAt: new Date(publishedAt), author, summary, feedId: Number(feedId) }
+    });
+    res.status(201).json(article);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
