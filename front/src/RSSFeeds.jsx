@@ -1,23 +1,20 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import ArticlesList from "./ArticlesList";
 
 export default function RSSFeeds({ userId }) {
   const [feeds, setFeeds] = useState([]);
   const [form, setForm] = useState({ title: "", url: "", description: "", categories: "" });
   const [message, setMessage] = useState("");
+  const [openFeedId, setOpenFeedId] = useState(null);
 
-  // Récupère la liste des flux à l'ouverture du composant
-  useEffect(() => {
-    fetchFeeds();
-  }, []);
+  useEffect(() => { fetchFeeds(); }, []);
 
   const fetchFeeds = async () => {
     try {
       const response = await axios.get(`http://localhost:3001/rssfeeds/${userId}`);
       setFeeds(response.data);
-    } catch (error) {
-      setMessage("Erreur lors de la récupération des flux.");
-    }
+    } catch (error) { setMessage("Erreur lors de la récupération des flux."); }
   };
 
   const handleChange = (e) => {
@@ -29,7 +26,7 @@ export default function RSSFeeds({ userId }) {
     setMessage("");
     try {
       await axios.post("http://localhost:3001/rssfeeds", { ...form, userId });
-      setMessage("Flux ajouté !");
+      setMessage("Flux ajouté");
       setForm({ title: "", url: "", description: "", categories: "" });
       fetchFeeds();
     } catch (error) {
@@ -40,7 +37,7 @@ export default function RSSFeeds({ userId }) {
   const handleDeleteFeed = async (id) => {
     try {
       await axios.delete(`http://localhost:3001/rssfeeds/${id}`);
-      setMessage("Flux supprimé !");
+      setMessage("Flux supprimé");
       fetchFeeds();
     } catch (error) {
       setMessage("Erreur lors de la suppression du flux.");
@@ -61,10 +58,20 @@ export default function RSSFeeds({ userId }) {
       <ul>
         {feeds.map(feed => (
           <li key={feed.id} style={{ marginBottom: 12, borderBottom: "1px solid #eee", paddingBottom: 8 }}>
-            <strong>{feed.title}</strong> (<a href={feed.url} target="_blank" rel="noopener noreferrer">{feed.url}</a>)<br />
+            <strong
+              style={{ cursor: "pointer", color: "#007bff" }}
+              onClick={() => setOpenFeedId(openFeedId === feed.id ? null : feed.id)}
+            >
+              {feed.title}
+            </strong>
+            (<a href={feed.url} target="_blank" rel="noopener noreferrer">{feed.url}</a>)<br />
             <small>{feed.description}</small>
             <div>Catégories : {feed.categories || "-"}</div>
             <button onClick={() => handleDeleteFeed(feed.id)} style={{ marginTop: 4, color: "#b00" }}>Supprimer</button>
+            {/* Ici on affiche les articles seulement si openFeedId === feed.id */}
+            {openFeedId === feed.id && (
+              <ArticlesList feedId={feed.id} />
+            )}
           </li>
         ))}
       </ul>

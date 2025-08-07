@@ -15,8 +15,9 @@ export default function Login({ onLogin }) {
         password,
       });
       setMessage("Connexion réussie !");
+      localStorage.setItem("user", JSON.stringify(response.data.user));
       if (typeof onLogin === "function") {
-        onLogin(response.data.user); // <-- Ici c'est crucial !
+        onLogin(response.data.user);
       }
     } catch (error) {
       setMessage((error.response?.data?.error || "Erreur lors de la connexion"));

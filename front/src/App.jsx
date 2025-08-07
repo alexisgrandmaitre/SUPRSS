@@ -1,10 +1,15 @@
 import React, { useState } from "react";
 import Login from "./Login";
 import RSSFeeds from "./RSSFeeds";
+import FavoritesList from "./FavoritesList";
 
 function App() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+  const stored = localStorage.getItem("user");
+  return stored ? JSON.parse(stored) : null;
+});
 
+  
   return (
     <div>
       {!user ? (
@@ -18,6 +23,7 @@ function App() {
             </button>
           </div>
           <RSSFeeds userId={user.id} />
+          <FavoritesList userId={user.id} />
         </>
       )}
     </div>
