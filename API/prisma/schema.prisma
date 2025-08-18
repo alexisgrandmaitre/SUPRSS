@@ -45,4 +45,5 @@ model Article {
   feed        RSSFeed  @relation(fields: [feedId], references: [id])
   feedId      Int
   createdAt   DateTime @default(now())
+  @@unique([feedId, url])
 }

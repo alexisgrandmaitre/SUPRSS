@@ -1,33 +1,38 @@
 import React, { useState } from "react";
 import Login from "./Login";
 import RSSFeeds from "./RSSFeeds";
-import FavoritesList from "./FavoritesList";
+import "./styles.css";
 
-function App() {
+export default function App(){
   const [user, setUser] = useState(() => {
-  const stored = localStorage.getItem("user");
-  return stored ? JSON.parse(stored) : null;
-});
+    const s = localStorage.getItem("user");
+    return s ? JSON.parse(s) : null;
+  });
 
-  
+  const logout = () => { localStorage.removeItem("user"); setUser(null); };
+
   return (
-    <div>
-      {!user ? (
-        <Login onLogin={setUser} />
+    <div className="app-shell">
+      <div className="header">
+        <div className="title">SUPRSS • Lecteur RSS</div>
+        <div className="right">
+          {user ? (
+            <>
+              <span>{user.email}</span>
+              <button className="ghost" onClick={logout}>Déconnexion</button>
+            </>
+          ) : <span className="muted">Non connecté</span>}
+        </div>
+      </div>
+
+      {user ? (
+        <RSSFeeds userId={user.id} />
       ) : (
-        <>
-          <div style={{ textAlign: "right", margin: 12 }}>
-            Connecté en tant que <b>{user.email}</b>
-            <button style={{ marginLeft: 10 }} onClick={() => setUser(null)}>
-              Déconnexion
-            </button>
-          </div>
-          <RSSFeeds userId={user.id} />
-          <FavoritesList userId={user.id} />
-        </>
+        <div className="panel">
+          <h2>Connexion</h2>
+          <Login onLogin={(u)=>{ localStorage.setItem("user", JSON.stringify(u)); setUser(u); }} />
+        </div>
       )}
     </div>
   );
 }
-
-export default App;

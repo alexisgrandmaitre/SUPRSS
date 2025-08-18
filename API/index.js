@@ -2,48 +2,73 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
-
 const app = express();
 app.use(cors());
 app.use(express.json());
-
 const prisma = new PrismaClient();
 const bcrypt = require('bcrypt');
-
+const cron = require('node-cron');
 const RSSParser = require('rss-parser');
-const rssParser = new RSSParser();
+const rssParser = new RSSParser({
+  requestOptions: {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (SUPRSS Demo)',
+      'Accept': 'application/rss+xml, application/xml;q=0.9,*/*;q=0.8'
+    },
+    timeout: 15000
+  }
+});
 
 // Import des articles
 
 async function importArticlesForFeed(feed) {
   try {
+    console.log(`[IMPORT] ${feed.title} (${feed.url})…`);
     const parsed = await rssParser.parseURL(feed.url);
+    console.log(`[IMPORT] ${parsed.items?.length || 0} items récupérés`);
 
-    for (const entry of parsed.items) {
-      // Vérifie si l'article existe déjà (par url + feedId)
+    let created = 0;
+    for (const entry of parsed.items || []) {
+      const url = entry.link || entry.guid; // fallback si link absent
+      if (!url) continue;
+
+      // déduplication
       const exists = await prisma.article.findFirst({
-        where: {
-          url: entry.link,
-          feedId: feed.id
-        }
+        where: { url, feedId: feed.id }
       });
-      if (exists) continue; // Ne pas dupliquer
+      if (exists) continue;
 
       await prisma.article.create({
         data: {
-          title: entry.title || "Sans titre",
-          url: entry.link,
+          title: entry.title || 'Sans titre',
+          url,
           publishedAt: entry.pubDate ? new Date(entry.pubDate) : new Date(),
           author: entry.creator || entry.author || null,
           summary: entry.contentSnippet || entry.summary || null,
           feedId: feed.id
         }
       });
+      created++;
     }
+    console.log(`[IMPORT] ${created} articles créés pour ${feed.title}`);
   } catch (err) {
-    console.error("Erreur lors de l'import RSS:", err.message);
+    console.error(`[IMPORT] Erreur (${feed.url}):`, err.message);
   }
 }
+
+
+// Actualisation des flux
+
+const REFRESH_CRON = process.env.REFRESH_CRON || '*/15 * * * *'; 
+cron.schedule(REFRESH_CRON, async () => {
+  console.log('[CRON] Rafraîchissement automatique des flux…');
+  try {
+    await refreshAllFeeds(); 
+    console.log('[CRON] Terminé');
+  } catch (e) {
+    console.error('[CRON] Échec:', e.message);
+  }
+});
 
 
 app.get('/', (req, res) => {
@@ -238,6 +263,78 @@ app.get('/favorites/:userId', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Filtres
+
+app.get('/articles', async (req, res) => {
+  try {
+    const { userId, feedId, status, favorite, q, tags } = req.query;
+
+    const where = {};
+
+    if (feedId) where.feedId = Number(feedId);
+
+    if (favorite === 'true') where.favorite = true;
+    if (favorite === 'false') where.favorite = false;
+
+    if (status === 'read') where.read = true;
+    if (status === 'unread') where.read = false;
+
+    if (q && q.trim()) {
+      where.OR = [
+        { title:   { contains: q, mode: 'insensitive' } },
+        { summary: { contains: q, mode: 'insensitive' } },
+        { author:  { contains: q, mode: 'insensitive' } },
+      ];
+    }
+
+    const feedWhere = {};
+    if (userId) feedWhere.userId = Number(userId);
+    if (tags && tags.trim()) {
+      feedWhere.categories = { contains: tags, mode: 'insensitive' };
+    }
+    if (Object.keys(feedWhere).length > 0) {
+      where.feed = feedWhere;
+    }
+
+    const articles = await prisma.article.findMany({
+      where,
+      orderBy: { publishedAt: 'desc' },
+    });
+
+    res.json(articles);
+  } catch (err) {
+    console.error('GET /articles error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Rafraîchir un flux spécifique
+
+app.post('/rssfeeds/:id/refresh', async (req, res) => {
+  try {
+    const feedId = Number(req.params.id);
+    const feed = await prisma.rSSFeed.findUnique({ where: { id: feedId } });
+    if (!feed) return res.status(404).json({ error: 'Flux introuvable' });
+
+    await importArticlesForFeed(feed);
+    res.json({ ok: true, message: 'Flux rafraîchi' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Rafraîchir tous les flux
+app.post('/rssfeeds/refresh-all', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    await refreshAllFeeds({ userId });
+    res.json({ ok: true, message: 'Rafraîchissement terminé' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 
 
 const PORT = process.env.PORT || 3001;

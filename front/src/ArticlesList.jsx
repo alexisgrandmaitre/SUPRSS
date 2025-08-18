@@ -1,58 +1,99 @@
+// front/src/ArticlesList.jsx
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
-export default function ArticlesList({ feedId }) {
+export default function ArticlesList({ feedId, userId, filters = {} }) {
   const [articles, setArticles] = useState([]);
+  const [error, setError] = useState("");
 
   const fetchArticles = async () => {
-    const res = await axios.get(`http://localhost:3001/articles/${feedId}`);
-    setArticles(res.data);
+    if (!feedId || !userId) return; // garde-fou
+    try {
+      setError("");
+      const params = {
+        userId,
+        feedId,
+        status:   filters.status   || "",
+        favorite: filters.favorite || "",
+        q:        filters.q        || "",
+        tags:     filters.tags     || "",
+      };
+      const res = await axios.get("http://localhost:3001/articles", { params });
+      setArticles(Array.isArray(res.data) ? res.data : []);
+    } catch (e) {
+      console.error("fetchArticles error:", e);
+      setError("Impossible de charger les articles.");
+      setArticles([]);
+    }
   };
 
   useEffect(() => {
-    if (feedId) {
-      fetchArticles();
-    }
-  }, [feedId]);
+    fetchArticles();
+    // relance quand les filtres changent
+  }, [feedId, userId, filters.status, filters.favorite, filters.q, filters.tags]);
 
   const toggleRead = async (id, currentRead) => {
-    await axios.patch(`http://localhost:3001/articles/${id}/read`, { read: !currentRead });
-    fetchArticles();
+    try {
+      await axios.patch(`http://localhost:3001/articles/${id}/read`, { read: !currentRead });
+      fetchArticles();
+    } catch (e) {
+      console.error("toggleRead error:", e);
+    }
+  };
+
+  const toggleFavorite = async (id, currentFavorite) => {
+    try {
+      await axios.patch(`http://localhost:3001/articles/${id}/favorite`, { favorite: !currentFavorite });
+      fetchArticles();
+    } catch (e) {
+      console.error("toggleFavorite error:", e);
+    }
   };
 
   if (!feedId) return <div>Sélectionnez un flux pour voir ses articles.</div>;
 
   return (
-    <div style={{ marginTop: 20 }}>
-      <h3>Articles du flux</h3>
-      {articles.length === 0 && <div>Aucun article trouvé.</div>}
-      <ul>
+    <div style={{ marginTop: 8 }}>
+      {error && <div style={{ color: "#f66", marginBottom: 8 }}>{error}</div>}
+
+      <div className="articles">
+        {articles.length === 0 && !error && <div className="meta">Aucun article trouvé.</div>}
+
         {articles.map(a => (
-          <li key={a.id} style={{ marginBottom: 8, opacity: a.read ? 0.6 : 1 }}>
-            <a href={a.url} target="_blank" rel="noopener noreferrer"><b>{a.title}</b></a>
-            <br />
-            <span style={{ fontSize: 12 }}>
-              {a.author || "?"} | {new Date(a.publishedAt).toLocaleString()}
-              {a.read ? "(lu)" : "(non lu)"}
-            </span>
-            <br />
-            <span style={{ fontSize: 13 }}>{a.summary}</span>
-            <br />
-            <button onClick={() => toggleRead(a.id, a.read)}>
-              Marquer comme {a.read ? "non lu" : "lu"}
-            </button>
-            <button
-              style={{ marginLeft: 8, fontSize: 12, color: a.favorite ? "#e1b800" : "#666" }}
-              onClick={async () => {
-                await axios.patch(`http://localhost:3001/articles/${a.id}/favorite`, { favorite: !a.favorite });
-                fetchArticles();
-              }}
-            >
-              {a.favorite ? "★ Favori" : "☆ Favori"}
-            </button>
-          </li>
+          <div key={a.id} className="article" style={{ opacity: a.read ? 0.6 : 1 }}>
+            <div className="title">
+              <a href={a.url} target="_blank" rel="noreferrer">{a.title}</a>
+            </div>
+
+            <div className="meta">
+              {a.author || "Auteur inconnu"} • {new Date(a.publishedAt).toLocaleString()}
+            </div>
+
+            {a.summary && <div style={{ marginBottom: 8 }}>{a.summary}</div>}
+
+            <div className="badges" style={{ marginBottom: 8 }}>
+              {a.read && <span className="badge read">Lu</span>}
+              {a.favorite && <span className="badge fav">Favori</span>}
+            </div>
+
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                className={a.read ? "ghost" : "success"}
+                onClick={() => toggleRead(a.id, a.read)}
+              >
+                {a.read ? "Marquer non lu" : "Marquer lu"}
+              </button>
+
+              <button
+                className="ghost"
+                onClick={() => toggleFavorite(a.id, a.favorite)}
+              >
+                {a.favorite ? "★ Retirer des favoris" : "☆ Ajouter aux favoris"}
+              </button>
+            </div>
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
