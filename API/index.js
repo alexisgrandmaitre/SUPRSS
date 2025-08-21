@@ -23,10 +23,18 @@ const upload = multer({ storage: multer.memoryStorage() });
 const { XMLBuilder, XMLParser } = require('fast-xml-parser');
 const { parse: csvParse } = require('csv-parse/sync');
 const { stringify: csvStringify } = require('csv-stringify/sync');
-const allowedOrigin = process.env.CORS_ORIGIN || 'http://localhost';
+const allowedOrigins = process.env.CORS_ORIGIN || ['http://localhost', 'http://localhost:5173'];
 const CRON = process.env.REFRESH_CRON || "*/15 * * * *";
-app.use(cors({ origin: allowedOrigin, credentials: true }));
-app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+}));
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 
