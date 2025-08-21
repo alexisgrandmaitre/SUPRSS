@@ -18,8 +18,17 @@ const rssParser = new RSSParser({
     timeout: 15000
   }
 });
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
+const { XMLBuilder, XMLParser } = require('fast-xml-parser');
+const { parse: csvParse } = require('csv-parse/sync');
+const { stringify: csvStringify } = require('csv-stringify/sync');
+const allowedOrigin = process.env.CORS_ORIGIN || 'http://localhost';
+const CRON = process.env.REFRESH_CRON || "*/15 * * * *";
+app.use(cors({ origin: allowedOrigin, credentials: true }));
+app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
+app.get('/health', (req, res) => res.json({ ok: true }));
 
-// Import des articles
 
 async function importArticlesForFeed(feed) {
   try {
@@ -29,10 +38,9 @@ async function importArticlesForFeed(feed) {
 
     let created = 0;
     for (const entry of parsed.items || []) {
-      const url = entry.link || entry.guid; // fallback si link absent
+      const url = entry.link || entry.guid;
       if (!url) continue;
 
-      // déduplication
       const exists = await prisma.article.findFirst({
         where: { url, feedId: feed.id }
       });
@@ -56,20 +64,24 @@ async function importArticlesForFeed(feed) {
   }
 }
 
+async function refreshAllFeeds() {
+  console.log("[CRON] Démarrage import de tous les flux…");
+  const feeds = await prisma.rSSFeed.findMany(); // tu peux filtrer si tu as un statut "actif"
+  let totalCreated = 0;
 
-// Actualisation des flux
-
-const REFRESH_CRON = process.env.REFRESH_CRON || '*/15 * * * *'; 
-cron.schedule(REFRESH_CRON, async () => {
-  console.log('[CRON] Rafraîchissement automatique des flux…');
-  try {
-    await refreshAllFeeds(); 
-    console.log('[CRON] Terminé');
-  } catch (e) {
-    console.error('[CRON] Échec:', e.message);
+  for (const feed of feeds) {
+    try {
+      const before = Date.now();
+      await importArticlesForFeed(feed);
+      console.log(`[CRON] OK: ${feed.title || feed.url} (${Date.now()-before}ms)`);
+      // si tu veux compter les créations, fais-le dans importArticlesForFeed et retourne un nombre
+    } catch (e) {
+      console.error(`[CRON] Erreur sur ${feed.url}:`, e.message);
+    }
   }
-});
 
+  console.log(`[CRON] Terminé.`);
+}
 
 app.get('/', (req, res) => {
   res.json({ message: 'API SUPRSS opérationnelle !' });
@@ -114,7 +126,6 @@ app.post('/register', async (req, res) => {
 
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
-
   if (!email || !password) {
     return res.status(400).json({ error: 'Email et mot de passe sont requis.' });
   }
@@ -129,7 +140,6 @@ app.post('/login', async (req, res) => {
     return res.status(401).json({ error: 'Email ou mot de passe incorrect.' });
   }
 
-  // Ici, pas de token JWT : on renvoie juste les infos utilisateur
   res.status(200).json({
     message: 'Connexion réussie',
     user: {
@@ -143,22 +153,14 @@ app.post('/login', async (req, res) => {
 // Création d'un flux
 
 app.post('/rssfeeds', async (req, res) => {
-  const { title, url, description, categories, userId } = req.body;
-  if (!title || !url || !userId) {
-    return res.status(400).json({ error: 'Titre, url et userId sont requis.' });
-  }
-  
-  try {
-    const rssFeed = await prisma.rSSFeed.create({
-      data: { title, url, description, categories, userId: Number(userId) }
-    });
+  const { title, url, description, categories, userId } = req.body || {};
+  if (!userId || !url) return res.status(400).json({ error: 'userId et url requis' });
 
-    await importArticlesForFeed(rssFeed);
+  const rssFeed = await prisma.rSSFeed.create({
+    data: { title, url, description, categories, userId: Number(userId) }
+  });
 
-    res.status(201).json(rssFeed);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.status(201).json(rssFeed);
 });
 
 // Lister les flux d'un user
@@ -324,7 +326,8 @@ app.post('/rssfeeds/:id/refresh', async (req, res) => {
   }
 });
 
-// Rafraîchir tous les flux
+// Rafraîchir les flux
+
 app.post('/rssfeeds/refresh-all', async (req, res) => {
   try {
     const { userId } = req.query;
@@ -335,7 +338,262 @@ app.post('/rssfeeds/refresh-all', async (req, res) => {
   }
 });
 
+// Actualisation des flux
 
+const REFRESH_CRON = process.env.REFRESH_CRON || '*/15 * * * *'; 
+cron.schedule(REFRESH_CRON, async () => {
+  console.log('[CRON] Rafraîchissement automatique des flux…');
+  try {
+    await refreshAllFeeds(); 
+    console.log('[CRON] Terminé');
+  } catch (e) {
+    console.error('[CRON] Échec:', e.message);
+  }
+});
+
+// export opml
+
+app.get('/export/opml', async (req, res) => {
+  try {
+    const userId = Number(req.query.userId);
+    if (!userId) return res.status(400).json({ error: 'userId requis' });
+
+    const feeds = await prisma.rSSFeed.findMany({
+      where: { userId },
+      select: { title: true, url: true, description: true, categories: true }
+    });
+
+    const outlines = feeds.map(f => ({
+      '@_text': f.title || f.url,
+      '@_title': f.title || '',
+      '@_type': 'rss',
+      '@_xmlUrl': f.url,
+      '@_description': f.description || '',
+      '@_category': f.categories || ''
+    }));
+
+    const builder = new XMLBuilder({
+      ignoreAttributes: false,
+      suppressBooleanAttributes: false,
+      format: true
+    });
+
+    const opmlObj = {
+      opml: {
+        '@_version': '2.0',
+        head: { title: 'SUPRSS Export' },
+        body: { outline: outlines }
+      }
+    };
+
+    const xml = builder.build(opmlObj);
+
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="suprss-feeds.opml"');
+    res.send(xml);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Export json
+
+app.get('/export/json', async (req, res) => {
+  try {
+    const userId = Number(req.query.userId);
+    if (!userId) return res.status(400).json({ error: 'userId requis' });
+
+    const withArticles = String(req.query.withArticles || 'false') === 'true';
+
+    const feeds = await prisma.rSSFeed.findMany({
+      where: { userId },
+      include: withArticles ? {
+        Article: {
+          orderBy: { publishedAt: 'desc' },
+          select: {
+            title: true, url: true, publishedAt: true, author: true,
+            summary: true, read: true, favorite: true
+          }
+        }
+      } : false
+    });
+
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="suprss-export.json"');
+    res.send(JSON.stringify({
+      exportedAt: new Date().toISOString(),
+      userId,
+      feeds
+    }, null, 2));
+  } catch (e) {
+    console.error('GET /export/json error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
+// Export csv
+
+app.get('/export/csv', async (req, res) => {
+  try {
+    const userId = Number(req.query.userId);
+    if (!userId) return res.status(400).json({ error: 'userId requis' });
+
+    const feeds = await prisma.rSSFeed.findMany({
+      where: { userId },
+      select: { title: true, url: true, description: true, categories: true }
+    });
+
+    const records = feeds.map(f => ({
+      title: f.title || '',
+      url: f.url,
+      description: f.description || '',
+      categories: f.categories || ''
+    }));
+
+    const csv = csvStringify(records, { header: true, columns: ['title', 'url', 'description', 'categories'] });
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="suprss-feeds.csv"');
+    res.send(csv);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Import OPML
+
+app.post('/import/opml', upload.single('file'), async (req, res) => {
+  try {
+    const userId = Number(req.body.userId);
+    if (!userId) return res.status(400).json({ error: 'userId requis' });
+    if (!req.file) return res.status(400).json({ error: 'fichier OPML requis' });
+
+    const xml = req.file.buffer.toString('utf-8');
+    const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
+    const doc = parser.parse(xml);
+
+    const outlines = []
+    const body = doc?.opml?.body;
+
+    function collect(outline) {
+      if (!outline) return;
+      if (Array.isArray(outline)) { outline.forEach(collect); return; }
+      if (outline['@_xmlUrl']) outlines.push(outline);
+      if (outline.outline) collect(outline.outline);
+    }
+    collect(body?.outline);
+
+    let created = 0, skipped = 0;
+    for (const o of outlines) {
+      const url = o['@_xmlUrl'];
+      if (!url) { skipped++; continue; }
+
+      const exists = await prisma.rSSFeed.findFirst({ where: { userId, url } });
+      if (exists) { skipped++; continue; }
+
+      await prisma.rSSFeed.create({
+        data: {
+          userId,
+          url,
+          title: o['@_title'] || o['@_text'] || url,
+          description: o['@_description'] || null,
+          categories: o['@_category'] || null
+        }
+      });
+      created++;
+    }
+
+    res.json({ ok: true, imported: created, skipped });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
+// Import Json
+
+app.post('/import/json', upload.single('file'), async (req, res) => {
+  try {
+    const userId = Number(req.body.userId);
+    if (!userId) return res.status(400).json({ error: 'userId requis' });
+    if (!req.file) return res.status(400).json({ error: 'fichier JSON requis' });
+
+    const txt = req.file.buffer.toString('utf-8');
+    const data = JSON.parse(txt);
+
+    const feeds = data.feeds || [];
+    let created = 0, skipped = 0;
+
+    for (const f of feeds) {
+      if (!f.url) { skipped++; continue; }
+      const exists = await prisma.rSSFeed.findFirst({ where: { userId, url: f.url } });
+      if (exists) { skipped++; continue; }
+
+      await prisma.rSSFeed.create({
+        data: {
+          userId,
+          url: f.url,
+          title: f.title || f.url,
+          description: f.description || null,
+          categories: f.categories || null
+        }
+      });
+      created++;
+    }
+
+    res.json({ ok: true, imported: created, skipped });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
+// Import CSV
+
+app.post('/import/csv', upload.single('file'), async (req, res) => {
+  try {
+    const userId = Number(req.body.userId);
+    if (!userId) return res.status(400).json({ error: 'userId requis' });
+    if (!req.file) return res.status(400).json({ error: 'fichier CSV requis' });
+
+    const content = req.file.buffer.toString('utf-8');
+    const rows = csvParse(content, { columns: true, skip_empty_lines: true });
+
+    let created = 0, skipped = 0;
+    for (const r of rows) {
+      const url = (r.url || '').trim();
+      if (!url) { skipped++; continue; }
+
+      const exists = await prisma.rSSFeed.findFirst({ where: { userId, url } });
+      if (exists) { skipped++; continue; }
+
+      await prisma.rSSFeed.create({
+        data: {
+          userId,
+          url,
+          title: (r.title || url).trim(),
+          description: (r.description || '').trim(),
+          categories: (r.categories || '').trim()
+        }
+      });
+      created++;
+    }
+
+    res.json({ ok: true, imported: created, skipped });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+cron.schedule(CRON, () => {
+  console.log("[CRON] Rafraîchissement automatique des flux…");
+  refreshAllFeeds().catch(err => console.error("[CRON] Échec:", err));
+});
+
+if (process.env.REFRESH_ON_START !== "false") {
+  refreshAllFeeds().catch(err => console.error("[START] Échec refresh:", err));
+}
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {

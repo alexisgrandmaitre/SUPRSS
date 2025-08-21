@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import { api } from "./api";
 
 export default function FavoritesList({ userId }) {
   const [favorites, setFavorites] = useState([]);
   
   const fetchFavorites = async () => {
-  const res = await axios.get(`http://localhost:3001/favorites/${userId}`);
+  const res = await api.get(`/favorites/${userId}`);
   setFavorites(res.data);
 };
 
   useEffect(() => {
-    axios.get(`http://localhost:3001/favorites/${userId}`)
+    api.get(`/favorites/${userId}`)
       .then(res => setFavorites(res.data))
       .catch(() => setFavorites([]));
       fetchFavorites();

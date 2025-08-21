@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import { api, apiUrl } from "./api";
 import ArticlesList from "./ArticlesList";
 import FiltersBar from "./FiltersBar";
 
@@ -16,6 +16,21 @@ export default function RSSFeeds({ userId }) {
     favorite: ""
   });
 
+const [opmlFile, setOpmlFile] = useState(null);
+
+const handleImportOPML = async (e) => {
+  e.preventDefault();
+  if (!opmlFile) return;
+  const form = new FormData();
+  form.append('file', opmlFile);
+  form.append('userId', String(userId));
+  await axios.post('/import/opml', form, { headers: { 'Content-Type': 'multipart/form-data' }});
+  setMessage('Import OPML terminé');
+  setOpmlFile(null);
+  fetchFeeds();
+};
+
+  
   const fetchFeeds = async () => {
     try {
       const res = await axios.get(`http://localhost:3001/rssfeeds/${userId}`);
@@ -75,6 +90,25 @@ export default function RSSFeeds({ userId }) {
         {/* Colonne gauche : sidebar / gestion des flux */}
         <div className="panel">
           <h2>Mes flux</h2>
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+            <a href={apiUrl(`/export/opml?userId=${userId}`)} target="_blank" rel="noreferrer">
+              <button className="ghost">Exporter OPML</button>
+            </a>
+            <a href={apiUrl(`/export/json?userId=${userId}&withArticles=true`)} target="_blank" rel="noreferrer">
+              <button className="ghost">Exporter JSON</button>
+            </a>
+            <a href={apiUrl(`/export/csv?userId=${userId}`)} target="_blank" rel="noreferrer">
+              <button className="ghost">Exporter CSV</button>
+            </a>
+          </div>
+
+          <form onSubmit={handleImportOPML} style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+            <input type="file" accept=".opml,.xml" onChange={(e)=>setOpmlFile(e.target.files?.[0] || null)} />
+            <button type="submit">Importer OPML</button>
+          </form>
+
+
 
           <form onSubmit={handleAddFeed} style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
             <input name="title" value={form.title} onChange={handleChange} placeholder="Titre" required />

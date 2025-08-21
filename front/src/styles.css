@@ -10,7 +10,7 @@
   --warn:#f59e0b;      /* warning */
   --border:rgba(255,255,255,.08);
   --radius:14px;
-  --shadow:0 10px 30px rgba(0,0,0,.25);
+  --shadow:0 10px 30px rgba(48, 1, 1, 0.25);
 }
 
 *{box-sizing:border-box}

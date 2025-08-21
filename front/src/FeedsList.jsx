@@ -1,22 +1,45 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import { api } from "./api";
 
 export default function FeedsList({ onSelectFeed }) {
   const [feeds, setFeeds] = useState([]);
   const [newFeedUrl, setNewFeedUrl] = useState("");
   const [message, setMessage] = useState("");
 
+  //const fetchFeeds = async () => {
+  //  try {
+  //    const user = JSON.parse(localStorage.getItem("user"));
+  //    if (!user) return;
+  //    const res = await api.get(`/rssfeeds/${user.id}`);
+  //    setFeeds(res.data);
+  //  } catch (err) {
+  //    console.error("Erreur récupération feeds:", err);
+  //  }
+  //};
   const fetchFeeds = async () => {
+    console.log("🚀 Début fetchFeeds");
     try {
       const user = JSON.parse(localStorage.getItem("user"));
-      if (!user) return;
-      const res = await axios.get(`http://localhost:3001/feeds/${user.id}`);
+      console.log("🔍 User récupéré:", user);
+      
+      if (!user) {
+        console.log("❌ Pas d'utilisateur en localStorage");
+        return;
+      }
+      
+      console.log("🔍 URL appelée:", `/rssfeeds/${user.id}`);
+      const res = await api.get(`/rssfeeds/${user.id}`);
+      console.log("✅ Réponse API:", res);
+      console.log("✅ Data reçue:", res.data);
+      
       setFeeds(res.data);
+      console.log("✅ Feeds mis à jour dans le state");
     } catch (err) {
-      console.error("Erreur récupération feeds:", err);
+      console.log("❌ Erreur complète:", err);
+      console.log("❌ Erreur response:", err.response?.data);
+      console.log("❌ Erreur status:", err.response?.status);
     }
   };
-
   useEffect(() => {
     fetchFeeds();
   }, []);
@@ -25,7 +48,7 @@ export default function FeedsList({ onSelectFeed }) {
     e.preventDefault();
     try {
       const user = JSON.parse(localStorage.getItem("user"));
-      await axios.post("http://localhost:3001/feeds", {
+      await api.post("/rssfeeds", {
         url: newFeedUrl,
         userId: user.id,
       });

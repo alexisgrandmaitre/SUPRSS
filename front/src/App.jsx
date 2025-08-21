@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import Login from "./Login";
+import Register from "./Register";
 import RSSFeeds from "./RSSFeeds";
 import "./styles.css";
 
@@ -8,6 +9,7 @@ export default function App(){
     const s = localStorage.getItem("user");
     return s ? JSON.parse(s) : null;
   });
+  const [authView, setAuthView] = useState("login");
 
   const logout = () => { localStorage.removeItem("user"); setUser(null); };
 
@@ -29,8 +31,26 @@ export default function App(){
         <RSSFeeds userId={user.id} />
       ) : (
         <div className="panel">
-          <h2>Connexion</h2>
-          <Login onLogin={(u)=>{ localStorage.setItem("user", JSON.stringify(u)); setUser(u); }} />
+          <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+            <button
+              className={authView === "login" ? "" : "ghost"}
+              onClick={()=>setAuthView("login")}
+            >
+              Connexion
+            </button>
+            <button
+              className={authView === "register" ? "" : "ghost"}
+              onClick={()=>setAuthView("register")}
+            >
+              Créer un compte
+            </button>
+          </div>
+
+          {authView === "login" ? (
+            <Login onLogin={(u)=>{ localStorage.setItem("user", JSON.stringify(u)); setUser(u); }} />
+          ) : (
+            <Register onRegistered={(u)=>{ setUser(u); }} />
+          )}
         </div>
       )}
     </div>

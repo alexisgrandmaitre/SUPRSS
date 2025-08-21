@@ -1,13 +1,13 @@
 // front/src/ArticlesList.jsx
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import { api } from "./api";
 
 export default function ArticlesList({ feedId, userId, filters = {} }) {
   const [articles, setArticles] = useState([]);
   const [error, setError] = useState("");
 
   const fetchArticles = async () => {
-    if (!feedId || !userId) return; // garde-fou
+    if (!feedId || !userId) return;
     try {
       setError("");
       const params = {
@@ -18,7 +18,7 @@ export default function ArticlesList({ feedId, userId, filters = {} }) {
         q:        filters.q        || "",
         tags:     filters.tags     || "",
       };
-      const res = await axios.get("http://localhost:3001/articles", { params });
+      const res = await api.get("/articles", { params });
       setArticles(Array.isArray(res.data) ? res.data : []);
     } catch (e) {
       console.error("fetchArticles error:", e);
@@ -29,12 +29,11 @@ export default function ArticlesList({ feedId, userId, filters = {} }) {
 
   useEffect(() => {
     fetchArticles();
-    // relance quand les filtres changent
   }, [feedId, userId, filters.status, filters.favorite, filters.q, filters.tags]);
 
   const toggleRead = async (id, currentRead) => {
     try {
-      await axios.patch(`http://localhost:3001/articles/${id}/read`, { read: !currentRead });
+      await api.patch(`/articles/${id}/read`, { read: !currentRead });
       fetchArticles();
     } catch (e) {
       console.error("toggleRead error:", e);
@@ -43,7 +42,7 @@ export default function ArticlesList({ feedId, userId, filters = {} }) {
 
   const toggleFavorite = async (id, currentFavorite) => {
     try {
-      await axios.patch(`http://localhost:3001/articles/${id}/favorite`, { favorite: !currentFavorite });
+      await api.patch(`/articles/${id}/favorite`, { favorite: !currentFavorite });
       fetchArticles();
     } catch (e) {
       console.error("toggleFavorite error:", e);

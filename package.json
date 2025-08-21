@@ -1,5 +1,9 @@
 {
   "dependencies": {
-    "bcrypt": "^6.0.0"
+    "bcrypt": "^6.0.0",
+    "csv-parse": "^6.1.0",
+    "csv-stringify": "^6.6.0",
+    "fast-xml-parser": "^5.2.5",
+    "multer": "^2.0.2"
   }
 }

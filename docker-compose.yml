@@ -1,17 +1,54 @@
-version: '3.9'
+version: "3.9"
 
 services:
   db:
-    image: postgres:16
-    container_name: suprss-db
+    image: postgres:16-alpine
+    container_name: suprss_db
     environment:
-      POSTGRES_USER: suprssuser
-      POSTGRES_PASSWORD: suprsspass
-      POSTGRES_DB: suprssdb
+      POSTGRES_DB: suprss
+      POSTGRES_USER: suprss
+      POSTGRES_PASSWORD: suprss
     ports:
       - "5432:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U suprss -d suprss"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./API
+      dockerfile: Dockerfile
+    container_name: suprss_api
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://suprss:suprss@db:5432/suprss?schema=public
+      REFRESH_CRON: "*/15 * * * *"
+      CORS_ORIGIN: http://localhost,http://localhost:80
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -qO- http://localhost:3001/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build:
+      context: ./front
+      dockerfile: Dockerfile
+    container_name: suprss_web
+    ports:
+      - "80:80"
+    depends_on:
+      - api
 
 volumes:
   db-data:
