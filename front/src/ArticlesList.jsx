@@ -1,6 +1,5 @@
-// front/src/ArticlesList.jsx
 import React, { useEffect, useState } from "react";
-import { api } from "./api";
+import { api, apiUrl } from "./api";
 
 export default function ArticlesList({ feedId, userId, filters = {} }) {
   const [articles, setArticles] = useState([]);

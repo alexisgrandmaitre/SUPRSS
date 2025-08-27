@@ -13,7 +13,8 @@ export default function RSSFeeds({ userId }) {
     q: "",
     status: "",
     tags: "",
-    favorite: ""
+    favorite: "",
+    tags: ""
   });
 
 const [opmlFile, setOpmlFile] = useState(null);
@@ -24,16 +25,28 @@ const handleImportOPML = async (e) => {
   const form = new FormData();
   form.append('file', opmlFile);
   form.append('userId', String(userId));
-  await axios.post('/import/opml', form, { headers: { 'Content-Type': 'multipart/form-data' }});
+  await api.post('/import/opml', form, { headers: { 'Content-Type': 'multipart/form-data' }});
   setMessage('Import OPML terminé');
   setOpmlFile(null);
   fetchFeeds();
 };
 
+const categories = (() => {
+  const s = new Set();
+  (feeds || []).forEach(f => {
+    (f.categories || "")
+      .split(",")
+      .map(x => x.trim())
+      .filter(Boolean)
+      .forEach(x => s.add(x));
+  });
+  return Array.from(s).sort((a,b)=>a.localeCompare(b));
+})();
+
   
   const fetchFeeds = async () => {
     try {
-      const res = await axios.get(`http://localhost:3001/rssfeeds/${userId}`);
+      const res = await api.get(`/rssfeeds/${userId}`);
       setFeeds(Array.isArray(res.data) ? res.data : []);
     } catch (e) {
       console.error("fetchFeeds error:", e);
@@ -52,7 +65,7 @@ const handleImportOPML = async (e) => {
     e.preventDefault();
     setMessage("");
     try {
-      await axios.post("http://localhost:3001/rssfeeds", { ...form, userId });
+      await api.post("/rssfeeds", { ...form, userId });
       setMessage("Flux ajouté.");
       setForm({ title: "", url: "", description: "", categories: "" });
       fetchFeeds();
@@ -64,7 +77,7 @@ const handleImportOPML = async (e) => {
 
   const handleDeleteFeed = async (id) => {
     try {
-      await axios.delete(`http://localhost:3001/rssfeeds/${id}`);
+      await api.delete(`/rssfeeds/${id}`);
       setMessage("Flux supprimé.");
       if (openFeedId === id) setOpenFeedId(null);
       fetchFeeds();
@@ -76,7 +89,7 @@ const handleImportOPML = async (e) => {
 
   const handleRefreshFeed = async (feed) => {
     try {
-      await axios.post(`http://localhost:3001/rssfeeds/${feed.id}/refresh`);
+      await api.post(`/rssfeeds/${feed.id}/refresh`);
       setMessage(`Flux "${feed.title}" rafraîchi`);
     } catch (e) {
       console.error(e);
@@ -150,12 +163,12 @@ const handleImportOPML = async (e) => {
           {openFeedId ? (
             <>
               <h2>Articles</h2>
-              <FiltersBar filters={filters} setFilters={setFilters} />
-              <ArticlesList feedId={openFeedId} userId={userId} filters={filters} />
+              <FiltersBar filters={filters} setFilters={setFilters} categories={categories} />
+              <ArticlesList feedId={openFeedId} userId={userId} filters={filters} categories={categories} />
             </>
           ) : (
             <>
-              <h2>Bienvenue 👋</h2>
+              <h2>Bienvenue</h2>
               <div className="meta">Clique un flux à gauche pour afficher ses articles ici.</div>
               <div className="sep"></div>
               <div className="badges">

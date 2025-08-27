@@ -12,8 +12,9 @@ const RSSParser = require('rss-parser');
 const rssParser = new RSSParser({
   requestOptions: {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (SUPRSS Demo)',
-      'Accept': 'application/rss+xml, application/xml;q=0.9,*/*;q=0.8'
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      'Accept': 'application/rss+xml, application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8'
     },
     timeout: 15000
   }
@@ -25,6 +26,7 @@ const { parse: csvParse } = require('csv-parse/sync');
 const { stringify: csvStringify } = require('csv-stringify/sync');
 const allowedOrigins = process.env.CORS_ORIGIN || ['http://localhost', 'http://localhost:5173'];
 const CRON = process.env.REFRESH_CRON || "*/15 * * * *";
+
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -168,6 +170,8 @@ app.post('/rssfeeds', async (req, res) => {
     data: { title, url, description, categories, userId: Number(userId) }
   });
 
+  await importArticlesForFeed(rssFeed);
+
   res.status(201).json(rssFeed);
 });
 
@@ -278,15 +282,13 @@ app.get('/favorites/:userId', async (req, res) => {
 
 app.get('/articles', async (req, res) => {
   try {
-    const { userId, feedId, status, favorite, q, tags } = req.query;
+    const { userId, feedId, status, favorite, q, tags, category } = req.query;
 
-    const where = {};
+    const where = {AND: [] };
 
     if (feedId) where.feedId = Number(feedId);
-
     if (favorite === 'true') where.favorite = true;
     if (favorite === 'false') where.favorite = false;
-
     if (status === 'read') where.read = true;
     if (status === 'unread') where.read = false;
 

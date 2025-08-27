@@ -36,7 +36,7 @@ model Article {
   summary     String?
   read        Boolean  @default(false)
   favorite    Boolean  @default(false)
-  feed        RSSFeed  @relation(fields: [feedId], references: [id])
+  feed        RSSFeed  @relation(fields: [feedId], references: [id], onDelete: Cascade)
   feedId      Int
   createdAt   DateTime @default(now())
   @@unique([feedId, url])
