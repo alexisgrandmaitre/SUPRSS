@@ -6,16 +6,6 @@ export default function FeedsList({ onSelectFeed }) {
   const [newFeedUrl, setNewFeedUrl] = useState("");
   const [message, setMessage] = useState("");
 
-  //const fetchFeeds = async () => {
-  //  try {
-  //    const user = JSON.parse(localStorage.getItem("user"));
-  //    if (!user) return;
-  //    const res = await api.get(`/rssfeeds/${user.id}`);
-  //    setFeeds(res.data);
-  //  } catch (err) {
-  //    console.error("Erreur récupération feeds:", err);
-  //  }
-  //};
   const fetchFeeds = async () => {
     console.log("🚀 Début fetchFeeds");
     try {
