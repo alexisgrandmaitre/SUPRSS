@@ -13,21 +13,21 @@ export default function FeedsList({ onSelectFeed }) {
       console.log("🔍 User récupéré:", user);
       
       if (!user) {
-        console.log("❌ Pas d'utilisateur en localStorage");
+        console.log("Pas d'utilisateur en localStorage");
         return;
       }
       
       console.log("🔍 URL appelée:", `/rssfeeds/${user.id}`);
       const res = await api.get(`/rssfeeds/${user.id}`);
-      console.log("✅ Réponse API:", res);
-      console.log("✅ Data reçue:", res.data);
+      console.log("Réponse API:", res);
+      console.log("Data reçue:", res.data);
       
       setFeeds(res.data);
-      console.log("✅ Feeds mis à jour dans le state");
+      console.log("Feeds mis à jour dans le state");
     } catch (err) {
-      console.log("❌ Erreur complète:", err);
-      console.log("❌ Erreur response:", err.response?.data);
-      console.log("❌ Erreur status:", err.response?.status);
+      console.log("Erreur complète:", err);
+      console.log("Erreur response:", err.response?.data);
+      console.log("Erreur status:", err.response?.status);
     }
   };
   useEffect(() => {
